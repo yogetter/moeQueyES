@@ -53,7 +53,7 @@ def match_data(source, count, name):
 def create_newdata(countData, allData):
 	newData = []
 	for name in countData.index:
-		if countData[name] > 300
+		if countData[name] > 300:
 			newData.append(match_data(allData['_source'], countData[name], name))
 	return newData
 
