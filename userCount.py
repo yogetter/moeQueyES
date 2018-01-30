@@ -30,10 +30,10 @@ def extract_region(x):
 
 
 def check_type(data):
-	if type(data) == str:
-		return str
-	else:
+	try:
 		return int(data)
+	except:
+		return data
 
 def match_data(source, count, name):
 	Data = {'name': name, 'count': count, 'region': 'undefined', 'school': 'undefined', 'role': 'undefined'}
@@ -42,9 +42,8 @@ def match_data(source, count, name):
 		try:
 			if i['user'] == name.encode('unicode-escape'):
 				Data['region'] = check_type(i['region'])
-				Data['school'] = check_type(i['school'])
 				Data['role'] = check_type(i['role'])
-				break
+				Data['school'] = check_type(i['school'])
 		except:
 			continue
 
