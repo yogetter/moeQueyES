@@ -3,17 +3,16 @@ import pandas as pd
 import json 
 from collections import Counter
 
-def getEsData(index):
-    start_date = "2017-12-01"
-    end_date = "2017-12-31"
-    param_date = {"query":{"range":{"timestamp":{"gte":start_date, "lte":end_date}}}}
-    r = requests.get("http://10.1.64.82:9200/"+index+"/_search", json=param_date)
+def get_es_data(index, start_date, end_date, url):
+    param_date = {"query":{ "bool":{ "must_not":{ "term":{ "action": "logout"}}, "filter":{"range":{"timestamp":{"gte":start_date, "lte":end_date} }}}}}
+    #param_date = {"query":{"range":{"timestamp":{"gte":start_date, "lte":end_date}}}}
+    r = requests.get(url + index+"/_search", json=param_date)
     length = r.json()["hits"]["total"]
-    param = {"size" : length, "query":{"range":{"timestamp":{"gte":start_date, "lte":end_date}}}}
-    #print length
-    r = requests.get("http://10.1.64.82:9200/"+index+"/_search?scroll=1m", json=param)
-    #print json.dumps(r.json()["hits"]["hits"])
+    #param = {"size" : length, "query":{"range":{"timestamp":{"gte":start_date, "lte":end_date}}}}
+    param = {"size": length, "query":{ "bool":{ "must_not":{ "term":{ "action": "logout"}}, "filter":{"range":{"timestamp":{"gte":start_date, "lte":end_date} }}}}}
+    r = requests.get(url + index + "/_search?scroll=1m", json=param)
     data = pd.DataFrame(pd.read_json(r.text)['hits']['hits'])
+    #print "debug:", data
     return data
 
 def extract_user(x):
@@ -21,13 +20,6 @@ def extract_user(x):
         return x['user'].decode('unicode-escape') 
     except:
         return 'undefined'
-
-def extract_region(x):
-    try:
-        return x['region']
-    except:
-        return 'undefined'
-
 
 def check_type(data):
 	try:
@@ -37,7 +29,6 @@ def check_type(data):
 
 def match_data(source, count, name):
 	Data = {'name': name, 'count': count, 'region': 'undefined', 'school': 'undefined', 'role': 'undefined'}
-	#print name
 	for i in source.values:
 		try:
 			if i['user'] == name.encode('unicode-escape'):
@@ -49,23 +40,67 @@ def match_data(source, count, name):
 
 	return Data
 
-def create_newdata(countData, allData):
+def create_newdata(countData, data):
 	newData = []
 	for name in countData.index:
-		if countData[name] > 300:
-			newData.append(match_data(allData['_source'], countData[name], name))
+		if countData[name] >= 1:
+			newData.append(match_data(data['_source'], countData[name], name))
 	return newData
 
-data1 = getEsData("owncloud-action")
-#print "============================"
-data2 = getEsData("owncloud-login")
+def split_group(totalDf):
+	output = {'Day03':[], 'Day05':[], 'Day10':[], 'Day15':[], 'Day20':[], 'Day25':[], 'Day30':[]}
+	tmp = totalDf.name.value_counts() 
+	for i in tmp.index:
+		if tmp[i] >= 1 and tmp[i] <= 3:
+			output['Day03'].append(i)
+		if tmp[i] >= 4 and tmp[i] <= 5:
+			output['Day05'].append(i)
+		elif tmp[i] >= 6 and tmp[i]  <= 10:
+			output['Day10'].append(i)
+		elif tmp[i] >= 11 and tmp[i] <= 15:	
+			output['Day15'].append(i)
+		elif tmp[i] >= 16 and tmp[i] <= 20:	
+			output['Day20'].append(i)
+		elif tmp[i] >= 21 and tmp[i] <= 25:	
+			output['Day25'].append(i)
+		elif tmp[i] >= 26 and tmp[i] <= 30:	
+			output['Day30'].append(i)
+	
+	return output
 
-f = [data1,data2]
-allData = pd.concat(f)
+def check_user_detail(data):
+	for i in data['_source'].values:
+		try:
+			if i['user'].decode('unicode-escape') == u'黃文穗':
+				print i['user'], i['action'], i['timestamp']
+		except:
+			continue
+def count_everyday():
+	totalDf = pd.DataFrame(columns=['count', 'name', 'region', 'role', 'school'])
+	Y = "2018"
+	M = "01"
+	dateFormat1 = Y+"-"+M+"-0"
+	dateFormat2 = Y+"-"+M+"-"
+	timeStart = "00:00:00+08:00"
+	timeEnd = "23:59:59+08:00"
+	for day in range(1,32):
+		if day <= 9:
+			data1 = get_es_data("owncloud-action", dateFormat1 + str(day)+ "T" + timeStart, dateFormat1 + str(day)+ "T" + timeEnd, "http://10.1.64.82:9200/")
+			#data2 = get_es_data("owncloud-login", dateFormat1 + str(day) + "T" + timeStart, dateFormat1 + str(day)+ "T" + timeEnd, "http://10.1.64.82:9200/")
+		else:
+			data1 = get_es_data("owncloud-action", dateFormat2 + str(day)+ "T" + timeStart, dateFormat2 + str(day)+ "T" + timeEnd, "http://10.1.64.82:9200/")
+			#data2 = get_es_data("owncloud-login", dateFormat2 + str(day) + "T" + timeStart, dateFormat2 + str(day)+ "T" + timeEnd, "http://10.1.64.82:9200/")
+	
+		#data = pd.concat([data1, data2])
+		data = data1
+		if data.empty :
+			continue
+		data['user'] = data['_source'].apply(extract_user)
+		#check_user_detail(data)
+		newData = create_newdata(data.user.value_counts(), data)
+		tmpDf = pd.DataFrame(pd.read_json(json.dumps(newData, ensure_ascii=False)))
+		totalDf = pd.concat([totalDf, tmpDf], ignore_index=True)
+	return totalDf, data
 
-allData['user']=allData['_source'].apply(extract_user)
-allData['region']=allData['_source'].apply(extract_region)
-#print(allData.user.value_counts().reset_index().rename(columns={'index':'user', 'user':'count'}).head(n=15))
-newData = create_newdata(allData.user.value_counts(), allData)
-
-print newData
+totalDf, data = count_everyday()
+output = split_group(totalDf)
