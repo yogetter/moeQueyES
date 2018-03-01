@@ -107,15 +107,15 @@ def count_everyday(dateFormat1, dateFormat2, timeStart, timeEnd):
    
     for day in range(1,32):
         if day <= 9:
-            totalDf = pd.concat([pd.DataFrame({'name':data[data['time'].str.contains('0'+str(i)+'T')]['user'].value_counts().index}), total])
+            totalDf = pd.concat([pd.DataFrame({'name':data[data['time'].str.contains('0'+str(day)+'T')]['user'].value_counts().index}), totalDf])
         else:
-            totalDf = pd.concat([pd.DataFrame({'name':data[data['time'].str.contains(str(i)+'T')]['user'].value_counts().index}), total])
+            totalDf = pd.concat([pd.DataFrame({'name':data[data['time'].str.contains(str(day)+'T')]['user'].value_counts().index}), totalDf])
     
     newDf = create_newdata(totalDf['name'].value_counts(), data)
     return newDf, data
 
 Y = '2018'
-M = '01'
+M = '02'
 dateFormat1 = Y+'-'+M+'-0'
 dateFormat2 = Y+'-'+M+'-'
 timeStart = '00:00:00+08:00'
